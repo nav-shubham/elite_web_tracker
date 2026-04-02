@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chronos | Tactical Command</title>
+    <style>
+        :root { --bg: #09090b; --surface: #18181b; --border: #27272a; --text: #f4f4f5; --accent: #3b82f6; --success: #10b981; --warning: #f59e0b; --danger: #ef4444; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', system-ui, sans-serif; }
+        body { background-color: var(--bg); color: var(--text); display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 1rem; }
+        
+        /* Structural Width Fix Applied Here */
+        .device-frame { background: var(--surface); border: 1px solid var(--border); border-radius: 24px; width: 100%; max-width: 600px; height: calc(100vh - 2rem); max-height: 850px; min-height: 600px; position: relative; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); display: flex; flex-direction: column; }
+        
+        .layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; padding: 2rem 1.5rem; display: flex; flex-direction: column; opacity: 0; pointer-events: none; transform: translateX(20px); transition: all 0.3s ease; background: var(--surface); z-index: 1; }
+        .layer.active { opacity: 1; pointer-events: all; transform: translateX(0); z-index: 10; }
+
+        .header { text-transform: uppercase; letter-spacing: 2px; color: #a1a1aa; font-size: 0.85rem; font-weight: 700; margin-bottom: 0.5rem; text-align: center; }
+        .title { font-size: 1.6rem; font-weight: 800; text-align: center; margin-bottom: 1.5rem; color: #fff; }
+        
+        .time-display { font-size: 4.5rem; font-family: 'Courier New', monospace; font-weight: 800; text-align: center; margin: auto 0; font-variant-numeric: tabular-nums; }
+        .time-display.rest { color: var(--warning); }
+        .time-display.active { color: var(--success); }
+        .time-display.paused { color: #a1a1aa; }
+
+        .input-group { margin-bottom: 1rem; display: flex; gap: 0.5rem; flex-direction: column; }
+        .input-row { display: flex; gap: 0.5rem; }
+        input, select { flex: 1; background: var(--bg); border: 1px solid var(--border); color: #fff; padding: 1rem; border-radius: 8px; font-size: 1rem; outline: none; }
+        input:focus, select:focus { border-color: var(--accent); }
+        
+        .btn { padding: 1rem; border: none; border-radius: 8px; font-weight: 700; font-size: 1rem; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; transition: all 0.2s; color: #fff; width: 100%; display: flex; justify-content: center; align-items: center; gap: 0.5rem; }
+        .btn:active { transform: scale(0.98); }
+        .btn-primary { background: var(--accent); }
+        .btn-success { background: var(--success); }
+        .btn-warning { background: var(--warning); color: #000; }
+        .btn-danger { background: var(--danger); }
+        .btn-secondary { background: var(--bg); border: 1px solid var(--border); }
+        .btn-sm { padding: 0.5rem 0.8rem; font-size: 0.8rem; border-radius: 4px; }
+        
+        .action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: auto; }
+        
+        .list-container { flex-grow: 1; overflow-y: auto; background: var(--bg); border-radius: 8px; border: 1px solid var(--border); padding: 0.5rem; margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.5rem; }
+        .list-item { background: var(--surface); padding: 0.8rem; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; border: 1px solid var(--border); }
+        .list-item-meta { color: var(--accent); font-weight: bold; }
+
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+    <div class="device-frame">
+        
+        <div class="layer active" id="layer-menu">
+            <div class="header">System Base</div>
+            <div class="title">Chronos Command</div>
+            <div style="margin-top: auto; display: flex; flex-direction: column; gap: 1rem;">
+                <button class="btn btn-primary" onclick="switchLayer('layer-day-selector')">Load / Build Protocol</button>
+                <button class="btn btn-secondary" onclick="openLedger()">Access Ledger History</button>
+            </div>
+        </div>
+
+        <div class="layer" id="layer-day-selector">
+            <div class="header">Templating</div>
+            <div class="title">Select Protocol Day</div>
+            <div style="display: grid; grid-template-columns: 1fr; gap: 0.5rem; margin-bottom: 1rem; flex-grow: 1; overflow-y: auto;">
+                <button class="btn btn-secondary" onclick="loadDay('Monday')">Monday</button>
+                <button class="btn btn-secondary" onclick="loadDay('Tuesday')">Tuesday</button>
+                <button class="btn btn-secondary" onclick="loadDay('Wednesday')">Wednesday</button>
+                <button class="btn btn-secondary" onclick="loadDay('Thursday')">Thursday</button>
+                <button class="btn btn-secondary" onclick="loadDay('Friday')">Friday</button>
+                <button class="btn btn-secondary" onclick="loadDay('Saturday')">Saturday</button>
+                <button class="btn btn-secondary" onclick="loadDay('Sunday')">Sunday</button>
+            </div>
+            <button class="btn btn-danger" onclick="switchLayer('layer-menu')">Back to Base</button>
+        </div>
+
+        <div class="layer" id="layer-builder">
+            <div class="header" id="builder-header">Configuration</div>
+            <div class="title" id="builder-title">Day-Wise Setup</div>
+            
+            <div class="input-row" style="margin-bottom: 1rem;">
+                <input type="text" id="build-ex-name" placeholder="Exercise Name..." style="flex: 2;">
+                <input type="number" id="build-ex-sets" placeholder="Sets" style="flex: 1;" inputmode="numeric">
+            </div>
+            <button class="btn btn-secondary" id="btn-add-ex" style="margin-bottom: 1rem;">Add to Sequence</button>
+
+            <div class="list-container" id="protocol-preview-list"></div>
+
+            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                <button class="btn btn-warning" id="btn-save-template">Save as Default for Day</button>
+                <div class="action-grid">
+                    <button class="btn btn-secondary" onclick="switchLayer('layer-day-selector')">Back</button>
+                    <button class="btn btn-success" id="btn-lock-protocol">Execute Sequence</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="layer" id="layer-active">
+            <div class="header">Active Execution</div>
+            <div class="title" id="active-exercise-name">Pending...</div>
+            <div style="text-align: center; color: #a1a1aa;">Set <span id="current-set-display">1</span> of <span id="total-sets-display">1</span></div>
+            
+            <div class="time-display active" id="active-timer">00:00</div>
+            
+            <div class="action-grid">
+                <button class="btn btn-warning" id="btn-pause-resume">Pause</button>
+                <button class="btn btn-success" id="btn-finish-set">Log Set</button>
+            </div>
+        </div>
+
+        <div class="layer" id="layer-logging">
+            <div class="header">Refined Intelligence</div>
+            <div class="title">Log Performance</div>
+            
+            <div style="margin-top: 2rem; display: flex; flex-direction: column; gap: 1rem;">
+                <input type="number" id="input-reps" placeholder="Reps Performed" inputmode="numeric">
+                <input type="number" id="input-weight" placeholder="Weight (kg/lbs)" inputmode="numeric" step="any">
+            </div>
+
+            <button class="btn btn-primary" id="btn-save-log" style="margin-top: auto;">Commit & Rest</button>
+        </div>
+
+        <div class="layer" id="layer-rest">
+            <div class="header">Recovery Phase</div>
+            <div class="title">Strict Rest</div>
+            
+            <div class="time-display rest" id="rest-timer">02:00</div>
+            <div style="text-align: center; color: #a1a1aa; margin-top: 1rem;">Up Next: <br><strong id="next-exercise-preview" style="color: #fff; font-size: 1.2rem;">Pending...</strong></div>
+            
+            <div style="margin-top: auto;">
+                <button class="btn btn-warning" id="btn-skip-rest">Skip Rest</button>
+            </div>
+        </div>
+
+        <div class="layer" id="layer-history">
+            <div class="header">Database</div>
+            <div class="title">Session Ledger</div>
+            
+            <div class="list-container" id="history-list"></div>
+
+            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                <a href="/api/export" class="btn btn-success" style="text-decoration: none; text-align: center;">Download CSV</a>
+                <div class="action-grid">
+                    <button class="btn btn-secondary" onclick="switchLayer('layer-menu')">Back</button>
+                    <button class="btn btn-danger" id="btn-clear-history">Erase</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const layers = ['layer-menu', 'layer-day-selector', 'layer-builder', 'layer-active', 'layer-logging', 'layer-rest', 'layer-history'];
+        const switchLayer = (target) => {
+            layers.forEach(l => document.getElementById(l).classList.remove('active'));
+            document.getElementById(target).classList.add('active');
+        };
+
+        const formatTime = (sec) => `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
+        
+        let protocol = [];
+        let currentDayContext = "";
+        let currentExIndex = 0;
+        let currentSet = 1;
+        let activeInterval = null, restInterval = null;
+        let activeSeconds = 0, restSeconds = 120;
+        let isPaused = false;
+
+        // --- TEMPLATE LOGIC ---
+        const loadDay = async (dayName) => {
+            currentDayContext = dayName;
+            document.getElementById('builder-title').innerText = `${dayName} Protocol`;
+            switchLayer('layer-builder');
+            
+            try {
+                const res = await fetch(`/api/routine/${dayName}`);
+                const data = await res.json();
+                protocol = data.exercises || [];
+                renderProtocolList();
+            } catch (e) { console.error("Failed to load routine."); protocol = []; renderProtocolList(); }
+        };
+
+        document.getElementById('btn-save-template').addEventListener('click', async () => {
+            if (!currentDayContext) return;
+            try {
+                await fetch(`/api/routine/${currentDayContext}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ exercises: protocol })
+                });
+                alert(`Template locked for ${currentDayContext}.`);
+            } catch (e) { alert("Failed to save template."); }
+        });
+
+        // --- BUILDER LOGIC ---
+        const renderProtocolList = () => {
+            const list = document.getElementById('protocol-preview-list');
+            list.innerHTML = protocol.map((ex, idx) => `
+                <div class="list-item">
+                    <span>${ex.name} <span class="list-item-meta" style="margin-left:8px;">${ex.targetSets} Sets</span></span>
+                    <button class="btn-danger btn-sm" onclick="removeExercise(${idx})" style="border:none; cursor:pointer;">X</button>
+                </div>
+            `).join('');
+        };
+
+        window.removeExercise = (index) => {
+            protocol.splice(index, 1);
+            renderProtocolList();
+        };
+
+        document.getElementById('btn-add-ex').addEventListener('click', () => {
+            const name = document.getElementById('build-ex-name').value.trim();
+            const sets = parseInt(document.getElementById('build-ex-sets').value);
+            if (!name || !sets) return;
+            protocol.push({ name, targetSets: sets });
+            document.getElementById('build-ex-name').value = '';
+            document.getElementById('build-ex-sets').value = '';
+            renderProtocolList();
+        });
+
+        document.getElementById('btn-lock-protocol').addEventListener('click', () => {
+            if (protocol.length === 0) return alert("Protocol is empty.");
+            currentExIndex = 0;
+            currentSet = 1;
+            prepareActiveSet();
+            switchLayer('layer-active');
+        });
+
+        // --- EXECUTION LOGIC ---
+        const prepareActiveSet = () => {
+            const ex = protocol[currentExIndex];
+            document.getElementById('active-exercise-name').innerText = ex.name;
+            document.getElementById('current-set-display').innerText = currentSet;
+            document.getElementById('total-sets-display').innerText = ex.targetSets;
+            
+            activeSeconds = 0;
+            isPaused = false;
+            document.getElementById('active-timer').innerText = "00:00";
+            document.getElementById('active-timer').classList.remove('paused');
+            document.getElementById('btn-pause-resume').innerText = "Pause";
+            document.getElementById('btn-pause-resume').classList.replace('btn-primary', 'btn-warning');
+            
+            clearInterval(activeInterval);
+            activeInterval = setInterval(() => {
+                if (!isPaused) {
+                    activeSeconds++;
+                    document.getElementById('active-timer').innerText = formatTime(activeSeconds);
+                }
+            }, 1000);
+        };
+
+        document.getElementById('btn-pause-resume').addEventListener('click', () => {
+            isPaused = !isPaused;
+            const timer = document.getElementById('active-timer');
+            const btn = document.getElementById('btn-pause-resume');
+            if (isPaused) {
+                timer.classList.add('paused');
+                btn.innerText = "Resume";
+                btn.classList.replace('btn-warning', 'btn-primary');
+            } else {
+                timer.classList.remove('paused');
+                btn.innerText = "Pause";
+                btn.classList.replace('btn-primary', 'btn-warning');
+            }
+        });
+
+        document.getElementById('btn-finish-set').addEventListener('click', () => {
+            clearInterval(activeInterval);
+            document.getElementById('input-reps').value = '';
+            document.getElementById('input-weight').value = '';
+            switchLayer('layer-logging');
+        });
+
+        document.getElementById('btn-save-log').addEventListener('click', async () => {
+            const reps = parseInt(document.getElementById('input-reps').value) || 0;
+            const weight = parseFloat(document.getElementById('input-weight').value) || 0;
+            const ex = protocol[currentExIndex];
+
+            try {
+                await fetch("/api/track", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ exercise_name: ex.name, set_number: currentSet, reps: reps, weight: weight, duration_seconds: activeSeconds })
+                });
+            } catch (e) { console.error("Sync failed."); }
+
+            if (currentSet < ex.targetSets) {
+                currentSet++;
+                startRestProtocol(`${ex.name} (Set ${currentSet})`);
+            } else {
+                currentExIndex++;
+                if (currentExIndex < protocol.length) {
+                    currentSet = 1;
+                    startRestProtocol(`${protocol[currentExIndex].name} (Set 1)`);
+                } else {
+                    alert("Protocol Complete. Returning to Base.");
+                    switchLayer('layer-menu');
+                }
+            }
+        });
+
+        const startRestProtocol = (nextTarget) => {
+            switchLayer('layer-rest');
+            document.getElementById('next-exercise-preview').innerText = nextTarget;
+            restSeconds = 120;
+            document.getElementById('rest-timer').innerText = "02:00";
+            
+            clearInterval(restInterval);
+            restInterval = setInterval(() => {
+                restSeconds--;
+                document.getElementById('rest-timer').innerText = formatTime(restSeconds);
+                if (restSeconds <= 0) endRestProtocol();
+            }, 1000);
+        };
+
+        const endRestProtocol = () => {
+            clearInterval(restInterval);
+            prepareActiveSet();
+            switchLayer('layer-active');
+        };
+
+        document.getElementById('btn-skip-rest').addEventListener('click', endRestProtocol);
+
+        // --- LEDGER LOGIC ---
+        const openLedger = async () => {
+            switchLayer('layer-history');
+            const list = document.getElementById('history-list');
+            list.innerHTML = "Loading...";
+            try {
+                const res = await fetch("/api/history");
+                const data = await res.json();
+                list.innerHTML = data.history.map(log => `
+                    <div class="list-item">
+                        <div style="display:flex; flex-direction:column; gap:0.2rem;">
+                            <span>${log.split}</span>
+                            <span style="font-size:0.75rem; color:#a1a1aa;">${log.timestamp}</span>
+                        </div>
+                        <span class="list-item-meta">${formatTime(log.duration)}</span>
+                    </div>
+                `).join('');
+            } catch (e) { list.innerHTML = "Failed to load database."; }
+        };
+
+        document.getElementById('btn-clear-history').addEventListener('click', async () => {
+            if (confirm("Execute purge? This will obliterate all stored intelligence.")) {
+                await fetch("/api/history", { method: "DELETE" });
+                openLedger();
+            }
+        });
+    </script>
+</body>
+</html>
